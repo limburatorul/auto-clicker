@@ -1,0 +1,472 @@
+<title>Auto Clicker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@500;700;800&family=Albert+Sans:wght@400;500;600;700&display=swap" />
+
+<style>
+  /* Dark-first by content, not by default: every screenshot on this page is a
+     dark acrylic window, and a light ground would ring twenty of them in
+     glare. Colour is painted from tokens throughout, so the choice is
+     deliberate rather than an unstyled fallback - see artifact-design's
+     single-theme exception. */
+  :root {
+    --ground: #08090c;
+    --ground-2: #0c0e13;
+    --panel: rgba(255, 255, 255, 0.035);
+    --panel-2: rgba(255, 255, 255, 0.065);
+    --edge: rgba(255, 255, 255, 0.08);
+    --edge-bright: rgba(255, 255, 255, 0.2);
+    --text: #eaeef4;
+    --dim: #8b93a2;
+    --dimmer: #5a6270;
+    --accent: #3fa9f5;
+    --accent-rgb: 63, 169, 245;
+    --lock: #ffb648;
+    --lock-rgb: 255, 182, 72;
+
+    --shell: 1060px;
+    --wide: 1220px;
+    --r: 14px;
+    --r-lg: 20px;
+
+    --display: 'Martian Mono', 'Cascadia Mono', ui-monospace, monospace;
+    --body: 'Albert Sans', 'Segoe UI', system-ui, sans-serif;
+    --mono: 'Martian Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .aura {
+    position: fixed;
+    inset: -15% -10% auto -10%;
+    height: 820px;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(52% 46% at 26% 0%, rgba(var(--accent-rgb), 0.20), transparent 72%),
+                radial-gradient(38% 38% at 82% 8%, rgba(var(--lock-rgb), 0.07), transparent 70%);
+    filter: blur(10px);
+  }
+
+  .shell { position: relative; z-index: 1; width: min(100% - 48px, var(--shell)); margin-inline: auto; }
+  .wide { position: relative; z-index: 1; width: min(100% - 48px, var(--wide)); margin-inline: auto; }
+
+  /* ---- type -------------------------------------------------------------
+     Martian Mono's segmented, digital-counter shape carries the idea this
+     whole page rests on - a tool measured in milliseconds - so it is not
+     just the headline face, it is also the numbers and captions. */
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(34px, 5vw, 54px); font-weight: 800; line-height: 1.08; letter-spacing: -0.015em; }
+  h2 { font-size: clamp(25px, 2.7vw, 33px); line-height: 1.2; }
+  h3 { font-size: 17px; font-weight: 700; }
+  p { margin: 0; }
+  .lede { font-size: clamp(16.5px, 1.4vw, 18.5px); color: var(--dim); max-width: 56ch; }
+  .body { color: var(--dim); max-width: 56ch; }
+  strong { color: var(--text); font-weight: 600; }
+  code { font-family: var(--mono); font-size: 0.92em; color: var(--text); background: rgba(255,255,255,0.06); padding: 0.1em 0.4em; border-radius: 4px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* ---- the rail: a crosshair instead of a plain dot - the section marker
+     names what the product actually does at that point on the page: aim at
+     something. */
+  .rail { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .rail::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge), transparent); }
+  .rail .cross { width: 15px; height: 15px; flex: none; }
+  .rail .cross circle { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+  .rail .cross path { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+  .rail .cross .dot { fill: var(--accent); stroke: none; }
+
+  /* ---- glass frame around every screenshot ------------------------------ */
+  .frame {
+    border-radius: var(--r-lg);
+    border: 1px solid var(--edge);
+    background: var(--panel);
+    overflow: hidden;
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+  .frame img { display: block; width: 100%; height: auto; }
+  .frame.lit { box-shadow: 0 26px 80px rgba(0, 0, 0, 0.6), 0 0 54px rgba(var(--accent-rgb), 0.14); }
+
+  figure { margin: 0; }
+  figcaption { margin-top: 12px; font-family: var(--mono); font-size: 12.5px; color: var(--dimmer); letter-spacing: 0.01em; }
+
+  /* ---- header / hero ----------------------------------------------------- */
+  header { padding: 84px 0 0; }
+  .mark { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; }
+  .mark .glyph {
+    width: 46px; height: 46px; border-radius: 12px; flex: none;
+    background: linear-gradient(155deg, rgba(var(--accent-rgb),0.24), rgba(var(--accent-rgb),0.05));
+    border: 1px solid var(--edge-bright);
+    display: grid; place-items: center;
+  }
+  .mark .glyph svg { width: 22px; height: 22px; }
+  .mark .name { font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: -0.01em; }
+  .mark .kind { font-family: var(--mono); font-size: 11px; color: var(--dimmer); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  .grad {
+    background: linear-gradient(97deg, var(--text) 12%, var(--accent) 88%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* A portrait app window doesn't take a wide cinematic strip the way a
+     landscape screenshot would - it sits beside the headline instead, the
+     way a phone mockup sits beside copy on an app's own landing page. */
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; align-items: start; }
+  @media (min-width: 900px) { .hero-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.68fr); gap: 44px; } }
+
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px; border-top: 1px solid var(--edge); padding-top: 18px; margin-top: 30px; }
+  @media (min-width: 640px) { .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .fact { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+  .fact b { font-family: var(--mono); font-weight: 700; font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .fact span { color: var(--dim); font-size: 13px; }
+
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 30px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--body); font-size: 15px; font-weight: 600;
+    padding: 12px 22px; border-radius: 11px; text-decoration: none;
+    border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #051221; box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.32); }
+  .btn-primary:hover { background: #6cbdff; }
+  .btn-ghost { border-color: var(--edge-bright); color: var(--text); background: var(--panel); }
+  .btn-ghost:hover { background: var(--panel-2); }
+  .free-note { font-family: var(--mono); font-size: 12.5px; color: var(--dimmer); }
+
+  /* ---- the hero screenshot's one animated moment: a click ping on the
+     Start button, positioned by percentage so it tracks the framed image at
+     any width. The counter beneath it is the same idea in text. */
+  /* The app's own window is portrait (a narrow desktop utility, not a
+     landscape one) - constrained to its natural proportion rather than
+     stretched to fill a grid track built for a widescreen shot. */
+  .hero-shot { position: relative; max-width: 280px; margin-inline: auto; }
+  .frame-app { max-width: 300px; }
+  .two.flip .frame-app { margin-left: auto; }
+  .ping-spot { position: absolute; left: 50%; top: 90.6%; width: 0; height: 0; }
+  .ping-spot .ring {
+    position: absolute; left: 0; top: 0; width: 14px; height: 14px;
+    margin: -7px; border-radius: 50%;
+    border: 1.5px solid rgba(var(--lock-rgb), 0.9);
+    animation: ping-out 1.15s cubic-bezier(.25,.6,.4,1) infinite;
+  }
+  .ping-spot .dot {
+    position: absolute; left: 0; top: 0; width: 8px; height: 8px;
+    margin: -4px; border-radius: 50%; background: var(--lock);
+    box-shadow: 0 0 10px rgba(var(--lock-rgb), 0.85);
+    animation: ping-dot 1.15s cubic-bezier(.25,.6,.4,1) infinite;
+  }
+  @keyframes ping-out {
+    0% { transform: scale(0.5); opacity: 0.9; }
+    100% { transform: scale(3.6); opacity: 0; }
+  }
+  @keyframes ping-dot {
+    0%, 14% { transform: scale(1.25); }
+    28%, 100% { transform: scale(1); }
+  }
+  .click-count {
+    margin-top: 14px; display: flex; align-items: baseline; gap: 8px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--dimmer);
+  }
+  .click-count b { color: var(--lock); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ---- sections ----------------------------------------------------------- */
+  section { padding: 96px 0 0; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: center; }
+  @media (min-width: 900px) {
+    .two { grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr); gap: 54px; }
+    .two.flip > :first-child { order: 2; }
+  }
+  .copy { display: flex; flex-direction: column; gap: 15px; }
+
+  .points { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .points li { position: relative; padding-left: 21px; color: var(--dim); font-size: 15px; line-height: 1.55; }
+  .points li::before {
+    content: ''; position: absolute; left: 2px; top: 8px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  }
+
+  /* ---- numbers band -------------------------------------------------------- */
+  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--edge); border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; margin-top: 32px; }
+  .num { background: var(--ground-2); padding: 20px 22px; display: flex; flex-direction: column; gap: 4px; }
+  .num b { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--text); }
+  .num span { font-size: 13px; color: var(--dim); }
+
+  /* ---- the capture -> poll -> click process rail --------------------------
+     A genuine sequence in time, which is the one case where a numbered chain
+     of steps is telling the reader something true rather than decorating. */
+  .process { display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin-top: 30px; }
+  .proc-step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; border: 1px solid var(--edge); border-radius: 999px;
+    background: var(--panel); font-size: 14px; color: var(--text);
+  }
+  .proc-step em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--dimmer); }
+  .proc-arrow { color: var(--dimmer); padding: 0 12px; font-size: 18px; flex: none; }
+  @media (max-width: 620px) { .proc-arrow { transform: rotate(90deg); padding: 6px 0; } .process { flex-direction: column; align-items: flex-start; } }
+
+  .confidence-tag {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    color: var(--lock); background: rgba(var(--lock-rgb), 0.12);
+    border: 1px solid rgba(var(--lock-rgb), 0.4);
+    padding: 5px 11px; border-radius: 999px; margin-top: 14px;
+  }
+  .confidence-tag .led { width: 6px; height: 6px; border-radius: 50%; background: var(--lock); box-shadow: 0 0 8px rgba(var(--lock-rgb), 0.9); }
+
+  /* ---- footer -------------------------------------------------------------- */
+  footer { margin-top: 104px; border-top: 1px solid var(--edge); padding: 40px 0 64px; }
+  .foot { display: flex; flex-wrap: wrap; gap: 22px; justify-content: space-between; align-items: flex-start; }
+  .foot p { color: var(--dimmer); font-size: 13.5px; max-width: 46ch; }
+  a { color: var(--accent); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="aura" aria-hidden="true"></div>
+
+<header>
+  <div class="shell">
+    <div class="mark">
+      <div class="glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="7.2" />
+          <path d="M12 3.3v2.4M12 18.3v2.4M3.3 12h2.4M18.3 12h2.4" />
+        </svg>
+      </div>
+      <div>
+        <div class="name">Auto Clicker</div>
+        <div class="kind">Free Windows utility</div>
+      </div>
+    </div>
+
+    <div class="hero-grid">
+      <div>
+        <h1>It clicks on your schedule<span class="grad">&mdash;and waits for the right moment.</span></h1>
+        <p class="lede" style="margin-top: 20px">
+          Set an interval, or aim it at a point, or a whole route of points. Then, when the job actually
+          needs it, tell it to wait until something appears on screen before it clicks at all.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#detection">See it wait for a click</a>
+          <a class="btn btn-ghost" href="#core">How it works</a>
+        </div>
+        <p class="free-note" style="margin-top: 12px">100% free &middot; no account, no licence key, nothing to unlock</p>
+
+        <div class="facts">
+          <div class="fact"><b>1&nbsp;ms</b><span>shortest interval you can set</span></div>
+          <div class="fact"><b>F6</b><span>hotkey &mdash; works from any window</span></div>
+          <div class="fact"><b>6</b><span>step types in the script editor</span></div>
+          <div class="fact"><b>0</b><span>accounts, keys or telemetry</span></div>
+        </div>
+      </div>
+
+      <figure class="hero-shot">
+        <div class="frame lit">
+          <img src="data:image/png;base64,{{HERO_B64}}" alt="Auto Clicker's Clicker tab: a 100 ms interval, a Start button, and an F6 hotkey" />
+          <div class="ping-spot"><span class="ring"></span><span class="dot"></span></div>
+        </div>
+        <div class="click-count"><span>running at 100&nbsp;ms &mdash;</span><b id="click-tally">0</b><span>clicks so far</span></div>
+      </figure>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- 1: the free core --------------------------------------------------- -->
+  <section id="core">
+    <div class="shell">
+      <div class="rail"><svg class="cross" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 0.6v2.6M8 12.8v2.6M0.6 8h2.6M12.8 8h2.6"/><circle class="dot" cx="8" cy="8" r="1.4"/></svg><span class="eyebrow">The free core</span></div>
+      <div class="two">
+        <div class="copy">
+          <h2>One click, one hotkey, one interval you control.</h2>
+          <p class="body">
+            Press Start, or the hotkey, from anywhere &mdash; the window doesn't need focus. Clicks land
+            wherever the cursor already is, on an interval you set down to the millisecond.
+          </p>
+          <ul class="points">
+            <li>A global hotkey (<code>F6</code> by default, yours to reassign) starts and stops it from inside any other window</li>
+            <li>Interval as low as 1 ms, or a random range so a long run doesn't land on the same beat every time</li>
+            <li>Runs until you stop it &mdash; there's no separate "session length" to configure</li>
+          </ul>
+        </div>
+        <figure>
+          <div class="frame frame-app"><img src="data:image/png;base64,{{HERO_B64}}" alt="The Clicker tab with a 100 ms interval and the F6 hotkey" /></div>
+          <figcaption>Everything on this tab is free &mdash; nothing here is a preview.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2: image detection, the flagship feature ---------------------------- -->
+  <section id="detection">
+    <div class="shell">
+      <div class="rail"><svg class="cross" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 0.6v2.6M8 12.8v2.6M0.6 8h2.6M12.8 8h2.6"/><circle class="dot" cx="8" cy="8" r="1.4"/></svg><span class="eyebrow">Image detection</span></div>
+      <div class="two flip">
+        <div class="copy">
+          <h2>Some buttons take a second to show up. This waits for them.</h2>
+          <p class="body">
+            Drag a box around the button, icon, or bit of colour you're waiting for &mdash; right from the
+            step editor, no separate screenshot tool. Auto Clicker checks the screen against that picture
+            several times a second and only clicks once it's actually there.
+          </p>
+          <ul class="points">
+            <li><strong>Wait for image</strong> pauses a script until the target appears, up to a timeout you set</li>
+            <li><strong>If image</strong> branches instead &mdash; one set of steps when it's found, a different set when it isn't</li>
+            <li>A confidence threshold (50&ndash;100%) keeps a match working even if the button moves a pixel or the game re-renders it slightly differently</li>
+          </ul>
+          <div class="confidence-tag"><span class="led"></span>90% confidence &middot; matched on screen</div>
+        </div>
+        <figure>
+          <div class="frame lit" style="max-width: 440px">
+            <img src="data:image/png;base64,{{WAIT_IMAGE_B64}}" alt="The Wait for image step: a captured target, 90% confidence, an 8-second timeout" />
+          </div>
+          <figcaption>A real step from the editor &mdash; not a mock-up.</figcaption>
+        </figure>
+      </div>
+
+      <div class="process">
+        <div class="proc-step"><em>1</em>Capture the target on screen</div>
+        <span class="proc-arrow">&rarr;</span>
+        <div class="proc-step"><em>2</em>Poll for it, a few times a second</div>
+        <span class="proc-arrow">&rarr;</span>
+        <div class="proc-step"><em>3</em>Click the moment it appears</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3: sequences, loops, conditions -------------------------------------- -->
+  <section id="sequences">
+    <div class="shell">
+      <div class="rail"><svg class="cross" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 0.6v2.6M8 12.8v2.6M0.6 8h2.6M12.8 8h2.6"/><circle class="dot" cx="8" cy="8" r="1.4"/></svg><span class="eyebrow">Sequences</span></div>
+      <div class="two">
+        <div class="copy">
+          <h2>Chain clicks, waits, loops and conditions into a real script.</h2>
+          <p class="body">
+            The Sequence tab builds a small tree of steps instead of one repeated action &mdash; click here,
+            wait, loop, check what's on screen, then decide what happens next.
+          </p>
+          <ul class="points">
+            <li>Loop a fixed number of times, or until you stop it</li>
+            <li>Branch with <strong>If image</strong> or <strong>If pixel</strong>, each with its own Then and Else steps</li>
+            <li>Save a script to a file and load it back later &mdash; or hand it to someone else</li>
+          </ul>
+        </div>
+        <figure>
+          <div class="frame lit frame-app"><img src="data:image/png;base64,{{SEQUENCE_B64}}" alt="A sequence: wait for a button, click it, then loop checking for a reward popup" /></div>
+          <figcaption>Wait for a button &rarr; click it &rarr; loop, checking for a popup on every pass.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4: multiple points + random interval ---------------------------------- -->
+  <section id="points">
+    <div class="shell">
+      <div class="rail"><svg class="cross" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 0.6v2.6M8 12.8v2.6M0.6 8h2.6M12.8 8h2.6"/><circle class="dot" cx="8" cy="8" r="1.4"/></svg><span class="eyebrow">Beyond one point</span></div>
+      <div class="two flip">
+        <div class="copy">
+          <h2>A route of points, not just a single spot.</h2>
+          <p class="body">
+            Switch "Click at" to a list, and Auto Clicker clicks each saved point in order before starting
+            over &mdash; useful for anything spread across a few fixed spots on screen.
+          </p>
+          <ul class="points">
+            <li>Add a point by clicking Add &mdash; the picker steps out of the way so your very next click marks the spot</li>
+            <li>Reorder or remove points without rebuilding the route</li>
+            <li>Pair it with a random interval so a repeating route doesn't land on the same rhythm every pass</li>
+          </ul>
+        </div>
+        <figure>
+          <div class="frame frame-app"><img src="data:image/png;base64,{{POINTS_B64}}" alt="Three saved points, clicked in order" /></div>
+          <figcaption>Three points, clicked in order, on repeat.</figcaption>
+        </figure>
+      </div>
+
+      <div class="numbers">
+        <div class="num"><b>&infin;</b><span>points a route can hold</span></div>
+        <div class="num"><b>1&ndash;600,000&nbsp;ms</b><span>the range an interval can cover</span></div>
+        <div class="num"><b>2</b><span>ways to aim &mdash; the cursor, or a saved route</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5: what it doesn't do -------------------------------------------------- -->
+  <section id="honest">
+    <div class="shell">
+      <div class="rail"><svg class="cross" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 0.6v2.6M8 12.8v2.6M0.6 8h2.6M12.8 8h2.6"/><circle class="dot" cx="8" cy="8" r="1.4"/></svg><span class="eyebrow">What it doesn't do</span></div>
+      <div class="two">
+        <div class="copy">
+          <h2>No account. No licence key. No telemetry.</h2>
+          <p class="body">
+            Every feature on this page &mdash; multiple points, random intervals, sequences, image
+            detection, saved profiles &mdash; is unlocked from the first launch. There's no Pro tier
+            waiting behind a key, because there isn't a Pro tier.
+          </p>
+          <ul class="points">
+            <li>No account, no login, no server it talks to</li>
+            <li>Nothing is collected, logged remotely, or phoned home</li>
+            <li>One <code>.exe</code>; nothing installs a background service</li>
+          </ul>
+        </div>
+        <div class="numbers" style="margin-top: 0">
+          <div class="num"><b>$0</b><span>now, and after any future update</span></div>
+          <div class="num"><b>0</b><span>licence keys to lose or buy back</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="shell foot">
+    <div class="mark" style="margin: 0">
+      <div class="glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="7.2" />
+          <path d="M12 3.3v2.4M12 18.3v2.4M3.3 12h2.4M18.3 12h2.4" />
+        </svg>
+      </div>
+      <div>
+        <div class="name">Auto Clicker</div>
+        <div class="kind">Windows 10 / 11 &middot; always free</div>
+      </div>
+    </div>
+    <p>Every screenshot on this page is the real application, running.</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var el = document.getElementById('click-tally');
+    if (!el) return;
+    if (reduced) { el.textContent = '1,240'; return; }
+    var n = 0;
+    var format = function (v) { return v.toLocaleString('en-US'); };
+    setInterval(function () {
+      n += 1;
+      el.textContent = format(n);
+    }, 100); // matches the 100 ms interval shown in the screenshot above it
+  })();
+</script>

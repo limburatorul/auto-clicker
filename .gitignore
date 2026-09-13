@@ -1,0 +1,19 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Claude Code's local, machine-specific permissions.
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller build output — the .exe is published as a GitHub Release
+# asset, not committed; `build/` is pure intermediate cache.
+/build/
+*.exe
+
+# site.html is generated from page.template.html + screenshots/ by
+# site/build_page.py — regenerate it, don't commit it (same convention as
+# the Shelf site: rebuildable in ~1s, so committing it is pure noise).
+/site/site.html
