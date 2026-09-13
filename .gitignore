@@ -8,12 +8,11 @@
 __pycache__/
 *.pyc
 
-# PyInstaller build output — the .exe is published as a GitHub Release
-# asset, not committed; `build/` is pure intermediate cache.
+# PyInstaller build output — `build/` is pure intermediate cache, and the
+# .exe itself isn't committed either.
 /build/
 *.exe
 
-# site.html is generated from page.template.html + screenshots/ by
-# site/build_page.py — regenerate it, don't commit it (same convention as
-# the Shelf site: rebuildable in ~1s, so committing it is pure noise).
-/site/site.html
+# The presentation page doesn't belong in the app's history, same as
+# Shelf's site living in its own separate repo, not gamebrowser's.
+/site/
