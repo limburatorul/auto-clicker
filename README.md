@@ -1,5 +1,7 @@
 # Auto Clicker
 
+**Download and details:** [protagonistlabs.app/autoclicker](https://protagonistlabs.app/autoclicker/)
+
 A free Windows clicker with a global hotkey, multi-point routes, and scripted
 sequences that can wait for something to appear on screen before they act.
 
