@@ -89,8 +89,9 @@ def load_template(path):
     return image
 
 
-def find_image(path, confidence=0.85):
-    """Return (x, y, score) of the best match on screen, or None."""
+def best_match(path):
+    """(x, y, score) of the closest match on screen - x, y is its centre - whether or
+    not it is a good one; None when the image can't be read or is bigger than the screen."""
     template = load_template(path)
     if template is None:
         return None
@@ -99,11 +100,15 @@ def find_image(path, confidence=0.85):
         return None
     result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
     _, score, _, location = cv2.minMaxLoc(result)
-    if score < confidence:
-        return None
     origin_x, origin_y = winapi.virtual_screen()[:2]
     height, width = template.shape[:2]
     return origin_x + location[0] + width // 2, origin_y + location[1] + height // 2, score
+
+
+def find_image(path, confidence=0.85):
+    """(x, y, score) if the image is on screen at least as well as `confidence`, else None."""
+    hit = best_match(path)
+    return hit if hit and hit[2] >= confidence else None
 
 
 def pixel_matches(x, y, color, tolerance):
@@ -168,6 +173,7 @@ class Runner(QThread):
         if target == "found" and self.found is None:
             self.note.emit("No image found to click on")
             return
+        home = winapi.cursor_pos() if target == "found" else None
         for index in range(max(1, step.get("count", 1))):
             if self._stop:
                 return
@@ -185,6 +191,11 @@ class Runner(QThread):
                 self.counted.emit(self.actions)
             if index:
                 self._sleep(30)
+        if home:
+            # A button under the cursor lights up in its hover style, and then no
+            # longer looks like the picture the next Wait for image is holding out.
+            self._sleep(40)  # let the click land where it was aimed first
+            winapi.move_to(*home)
 
     def _do_move(self, step):
         winapi.move_to(step.get("x", 0), step.get("y", 0))
@@ -203,14 +214,23 @@ class Runner(QThread):
 
     def _do_wait_image(self, step):
         self.found = None
+        name = os.path.basename(step.get("path", ""))
+        needed = step.get("confidence", 0.85)
+        closest = None
         deadline = time.perf_counter() + step.get("timeout", 10000) / 1000.0
         while not self._stop and time.perf_counter() < deadline:
-            hit = find_image(step.get("path", ""), step.get("confidence", 0.85))
-            if hit:
+            hit = best_match(step.get("path", ""))
+            if hit is None:
+                self.note.emit(f"Can't read {name}")
+                return
+            if hit[2] >= needed:
                 self.found = hit[:2]
                 return
+            closest = max(closest or 0, hit[2])
             self._sleep(200)
-        self.note.emit(f"{os.path.basename(step.get('path', ''))} never appeared")
+        if not self._stop:
+            self.note.emit(f"{name} never appeared (closest match {closest:.0%}, needs {needed:.0%})"
+                           if closest is not None else f"{name} never appeared")
 
     def _do_if_image(self, step):
         hit = find_image(step.get("path", ""), step.get("confidence", 0.85))

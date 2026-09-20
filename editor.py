@@ -8,7 +8,7 @@ in and out of a loop from drifting out of step with the model.
 import time
 
 import cv2
-from PySide6.QtCore import QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFileDialog,
                                QFormLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -28,7 +28,8 @@ class ScreenPicker(QWidget):
     """Covers every monitor. Physical coordinates come from GetCursorPos, so no
     logical-to-physical DPI conversion is needed anywhere in here."""
 
-    # (x, y) or (x, y, w, h) in physical pixels, or None if the user backed out.
+    # (x, y, (r, g, b)) for a point or (x, y, w, h) for a region, in physical
+    # pixels, or None if the user backed out.
     # Emitted exactly once, after the picker is gone, however it ended - callers
     # that hid their own windows to make room for it rely on always hearing back.
     finished = Signal(object)
@@ -40,6 +41,12 @@ class ScreenPicker(QWidget):
         self.origin_physical = None
         self.current_logical = None
         self._done = False
+        # The screen as it was before this overlay and before the mouse moved over
+        # anything: captures are cut from this. Grabbing live after the picker closes
+        # catches a button under the cursor already lit up in its hover style, and
+        # the picture then never matches the button as it normally looks.
+        self.snapshot = winapi.grab_screen()
+        self.origin = winapi.virtual_screen()[:2]
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setCursor(Qt.CrossCursor)
         self.setMouseTracking(True)
@@ -74,12 +81,22 @@ class ScreenPicker(QWidget):
         self.current_logical = event.position().toPoint()
         self.update()
 
+    def crop(self, rect):
+        x, y, width, height = rect
+        left, top = x - self.origin[0], y - self.origin[1]
+        return self.snapshot[top:top + height, left:left + width].copy()
+
+    def color_at(self, x, y):
+        blue, green, red = self.snapshot[y - self.origin[1], x - self.origin[0]]
+        return int(red), int(green), int(blue)
+
     def _finish(self, result):
         if self._done:
             return
         self._done = True
-        self.close()  # first, so the overlay is gone before anyone reads the screen
+        self.close()
         self.finished.emit(result)
+        self.snapshot = None  # ~40 MB on a two-monitor desktop, needed only until the crop is cut
 
     def closeEvent(self, event):
         if not self._done:  # closed some other way, e.g. Alt+F4
@@ -91,7 +108,8 @@ class ScreenPicker(QWidget):
         if event.button() != Qt.LeftButton:
             return
         if not self.region:
-            self._finish(winapi.cursor_pos())
+            x, y = winapi.cursor_pos()
+            self._finish((x, y, self.color_at(x, y)))
             return
         self.origin_logical = event.position().toPoint()
         self.origin_physical = winapi.cursor_pos()
@@ -110,32 +128,42 @@ class ScreenPicker(QWidget):
             self._finish(None)
 
 
+SETTLE_MS = 200  # the windows the caller just hid must be gone before the screen is photographed
+
+
 def pick_point(on_done):
-    """on_done gets (x, y), or None if the user backed out."""
-    picker = ScreenPicker(region=False)
-    picker.finished.connect(on_done)
-    picker.showFullScreen()
-    pick_point._keep = picker  # a local would be collected the moment we return
+    """on_done gets (x, y, (r, g, b)) - the colour as it was before the overlay -
+    or None if the user backed out."""
+    def start():
+        picker = ScreenPicker(region=False)
+        picker.finished.connect(on_done)
+        picker.showFullScreen()
+        pick_point._keep = picker  # a local would be collected the moment we return
+
+    QTimer.singleShot(SETTLE_MS, start)
 
 
 def capture_template(on_done):
     """Snip a region and keep it as the image to look for. on_done gets the
     saved file's path, or None if the user backed out."""
-    def save(rect):
-        if rect is None:
-            on_done(None)
-            return
-        frame = winapi.grab_screen(rect)
-        folder = store.APP_DIR / "images"
-        folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"target-{int(time.time())}.png"
-        cv2.imwrite(str(path), frame)
-        on_done(str(path))
+    def start():
+        picker = ScreenPicker(region=True)
 
-    picker = ScreenPicker(region=True)
-    picker.finished.connect(save)
-    picker.showFullScreen()
-    capture_template._keep = picker
+        def save(rect):
+            if rect is None:
+                on_done(None)
+                return
+            folder = store.APP_DIR / "images"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"target-{int(time.time())}.png"
+            cv2.imwrite(str(path), picker.crop(rect))
+            on_done(str(path))
+
+        picker.finished.connect(save)
+        picker.showFullScreen()
+        capture_template._keep = picker
+
+    QTimer.singleShot(SETTLE_MS, start)
 
 
 # --- step dialog ----------------------------------------------------------
@@ -224,7 +252,7 @@ class StepDialog(QDialog):
             widgets["x"].setValue(point[0])
             widgets["y"].setValue(point[1])
             if with_colour:
-                red, green, blue = winapi.pixel_color(point[0], point[1])
+                red, green, blue = point[2]
                 widgets["color"].setText(f"#{red:02x}{green:02x}{blue:02x}")
 
         self._step_aside(pick_point, apply)
