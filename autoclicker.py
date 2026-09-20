@@ -39,6 +39,7 @@ class AutoClicker(QWidget):
 
         self.config = store.Config()
         self.runner = None
+        self._note = ""  # why the last run did less than expected; stays until the next Start
 
         self._build()
         self._load_profile()
@@ -75,6 +76,7 @@ class AutoClicker(QWidget):
 
         self.status = QLabel("", objectName="status")
         self.status.setAlignment(Qt.AlignCenter)
+        self.status.setWordWrap(True)  # a note plus the hint is longer than the window
         body.addWidget(self.status)
 
         root.addLayout(body)
@@ -388,9 +390,10 @@ class AutoClicker(QWidget):
                 self.status.setText("Add a point first")
                 return
 
+        self._note = ""
         self.runner = engine.Runner(steps, repeat)
         self.runner.counted.connect(self._on_count)
-        self.runner.note.connect(self.status.setText)
+        self.runner.note.connect(self._on_note)
         self.runner.stopped.connect(self._on_stopped)
         self.runner.start()
         self._set_running(True)
@@ -403,7 +406,15 @@ class AutoClicker(QWidget):
         self._set_status()
 
     def _on_count(self, count):
-        self.status.setText(f"Running · {count} clicks · {self.config.hotkey['name']} to stop")
+        self._show(f"Running · {count} clicks · {self.config.hotkey['name']} to stop")
+
+    def _on_note(self, text):
+        if not self._note:  # the first note of a run is the cause; later ones follow from it
+            self._note = text
+            self._set_status()
+
+    def _show(self, text):
+        self.status.setText(f"{self._note} · {text}" if self._note else text)
 
     def _on_stopped(self):
         self._set_running(False)
@@ -412,8 +423,8 @@ class AutoClicker(QWidget):
         running = bool(self.runner and self.runner.isRunning())
         name = self.config.hotkey["name"]
         what = "sequence" if self.tabs.currentIndex() == 1 else "clicking"
-        self.status.setText(f"Running {what} · {name} to stop" if running
-                            else f"Idle · press {name} anywhere to start")
+        self._show(f"Running {what} · {name} to stop" if running
+                   else f"Idle · press {name} anywhere to start")
 
     # -- hotkey ------------------------------------------------------------
     def showEvent(self, event):

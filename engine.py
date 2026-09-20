@@ -29,7 +29,8 @@ def describe(step):
     """One line for the editor tree."""
     kind = step.get("type")
     if kind == "click":
-        where = "cursor" if step.get("target") == "cursor" else f"{step.get('x')}, {step.get('y')}"
+        where = {"cursor": "cursor", "found": "the found image"}.get(
+            step.get("target"), f"{step.get('x')}, {step.get('y')}")
         times = step.get("count", 1)
         suffix = f" ×{times}" if times > 1 else ""
         return f"Click {step.get('button', 'left')} at {where}{suffix}"
@@ -125,6 +126,7 @@ class Runner(QThread):
         self._stop = False
         self._last_report = 0.0
         self.actions = 0
+        self.found = None  # (x, y) where the last Wait for / If image saw its target
 
     def stop(self):
         self._stop = True
@@ -136,6 +138,8 @@ class Runner(QThread):
             while not self._stop and (self.repeat == 0 or rounds < self.repeat):
                 self._run(self.steps)
                 rounds += 1
+        except Exception as error:  # a worker thread's traceback goes nowhere in a windowed exe
+            self.note.emit(f"Stopped: {error}")
         finally:
             winapi.end_precise_timing()
             self.stopped.emit()
@@ -160,11 +164,17 @@ class Runner(QThread):
     # -- steps
     def _do_click(self, step):
         button = step.get("button", "left")
+        target = step.get("target")
+        if target == "found" and self.found is None:
+            self.note.emit("No image found to click on")
+            return
         for index in range(max(1, step.get("count", 1))):
             if self._stop:
                 return
-            if step.get("target") == "point":
+            if target == "point":
                 winapi.move_to(step.get("x", 0), step.get("y", 0))
+            elif target == "found":
+                winapi.move_to(*self.found)
             winapi.click(button)
             self.actions += 1
             # At a 1 ms interval this fires a thousand times a second; the UI
@@ -192,16 +202,20 @@ class Runner(QThread):
             rounds += 1
 
     def _do_wait_image(self, step):
+        self.found = None
         deadline = time.perf_counter() + step.get("timeout", 10000) / 1000.0
         while not self._stop and time.perf_counter() < deadline:
-            if find_image(step.get("path", ""), step.get("confidence", 0.85)):
+            hit = find_image(step.get("path", ""), step.get("confidence", 0.85))
+            if hit:
+                self.found = hit[:2]
                 return
             self._sleep(200)
         self.note.emit(f"{os.path.basename(step.get('path', ''))} never appeared")
 
     def _do_if_image(self, step):
-        found = find_image(step.get("path", ""), step.get("confidence", 0.85)) is not None
-        branch = "then" if found == step.get("found", True) else "otherwise"
+        hit = find_image(step.get("path", ""), step.get("confidence", 0.85))
+        self.found = hit[:2] if hit else None
+        branch = "then" if (hit is not None) == step.get("found", True) else "otherwise"
         self._run(step.get(branch, []))
 
     def _do_if_pixel(self, step):

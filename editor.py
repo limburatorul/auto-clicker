@@ -258,6 +258,7 @@ class StepDialog(QDialog):
         widgets["target"] = QComboBox()
         widgets["target"].addItem("Wherever the cursor is", "cursor")
         widgets["target"].addItem("A fixed point", "point")
+        widgets["target"].addItem("On the last image found", "found")
         form.addRow("Click", widgets["target"])
         point_row = self._point_row(widgets)
         form.addRow("Point", point_row)
