@@ -1,11 +1,13 @@
 """Auto Clicker - clicks where the cursor is, or runs a sequence you built."""
 
 import ctypes
+import os
 import sys
 from ctypes import wintypes
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPalette, QPen
+from PySide6.QtGui import (QColor, QIcon, QKeySequence, QPainter, QPalette,
+                           QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
                                QHBoxLayout, QInputDialog, QLabel, QListWidget,
                                QMenu, QMessageBox, QPushButton, QSpinBox,
@@ -513,8 +515,20 @@ class AutoClicker(QWidget):
         return False, 0
 
 
+def icon():
+    """app.ico, whether running from source or from the one-file exe (PyInstaller unpacks
+    --add-data next to the script into sys._MEIPASS)."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(base, "app.ico")
+    return QIcon(path) if os.path.exists(path) else QIcon()
+
+
 def main():
     app = QApplication(sys.argv)
+    # Without an explicit AppUserModelID the taskbar groups the window under the interpreter
+    # and shows its icon instead of ours.
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("limburatorul.AutoClicker")
+    app.setWindowIcon(icon())
     app.setStyle("Fusion")
     palette = app.palette()
     palette.setColor(QPalette.Text, QColor("#E8EAED"))

@@ -32,6 +32,7 @@ for input, the global hotkey, acrylic window effects, and screen capture.
 
 ```bash
 python -m PyInstaller --noconfirm --onefile --windowed --name "Auto Clicker" \
+  --icon app.ico --add-data "app.ico;." \
   --distpath . --workpath build --specpath build \
   --exclude-module tkinter --exclude-module PIL \
   --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick \
