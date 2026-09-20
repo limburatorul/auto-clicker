@@ -334,14 +334,15 @@ class AutoClicker(QWidget):
         self.config.save()
 
     def _add_point(self):
-        if self.target.currentData() != "points":
-            self.target.setCurrentIndex(1)  # picking a point implies using the list
         self.hide()
 
-        def done(point):
-            self.config.profile.setdefault("points", []).append([point[0], point[1]])
-            self.points.addItem(f"{point[0]}, {point[1]}")
-            self.config.save()
+        def done(point):  # None when the user pressed Esc - the window still returns
+            if point is not None:
+                if self.target.currentData() != "points":
+                    self.target.setCurrentIndex(1)  # picking a point implies using the list
+                self.config.profile.setdefault("points", []).append([point[0], point[1]])
+                self.points.addItem(f"{point[0]}, {point[1]}")
+                self.config.save()
             self.show()
 
         editor.pick_point(done)

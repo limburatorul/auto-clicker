@@ -28,7 +28,10 @@ class ScreenPicker(QWidget):
     """Covers every monitor. Physical coordinates come from GetCursorPos, so no
     logical-to-physical DPI conversion is needed anywhere in here."""
 
-    picked = Signal(object)  # (x, y) or (x, y, w, h), physical pixels
+    # (x, y) or (x, y, w, h) in physical pixels, or None if the user backed out.
+    # Emitted exactly once, after the picker is gone, however it ended - callers
+    # that hid their own windows to make room for it rely on always hearing back.
+    finished = Signal(object)
 
     def __init__(self, region=False):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -36,6 +39,7 @@ class ScreenPicker(QWidget):
         self.origin_logical = None
         self.origin_physical = None
         self.current_logical = None
+        self._done = False
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setCursor(Qt.CrossCursor)
         self.setMouseTracking(True)
@@ -70,12 +74,24 @@ class ScreenPicker(QWidget):
         self.current_logical = event.position().toPoint()
         self.update()
 
+    def _finish(self, result):
+        if self._done:
+            return
+        self._done = True
+        self.close()  # first, so the overlay is gone before anyone reads the screen
+        self.finished.emit(result)
+
+    def closeEvent(self, event):
+        if not self._done:  # closed some other way, e.g. Alt+F4
+            self._done = True
+            self.finished.emit(None)
+        super().closeEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton:
             return
         if not self.region:
-            self.picked.emit(winapi.cursor_pos())
-            self.close()
+            self._finish(winapi.cursor_pos())
             return
         self.origin_logical = event.position().toPoint()
         self.origin_physical = winapi.cursor_pos()
@@ -87,25 +103,28 @@ class ScreenPicker(QWidget):
         x, y = min(self.origin_physical[0], end[0]), min(self.origin_physical[1], end[1])
         width = abs(end[0] - self.origin_physical[0])
         height = abs(end[1] - self.origin_physical[1])
-        self.close()
-        if width >= 4 and height >= 4:
-            self.picked.emit((x, y, width, height))
+        self._finish((x, y, width, height) if width >= 4 and height >= 4 else None)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            self.close()
+            self._finish(None)
 
 
 def pick_point(on_done):
+    """on_done gets (x, y), or None if the user backed out."""
     picker = ScreenPicker(region=False)
-    picker.picked.connect(on_done)
+    picker.finished.connect(on_done)
     picker.showFullScreen()
     pick_point._keep = picker  # a local would be collected the moment we return
 
 
 def capture_template(on_done):
-    """Snip a region and keep it as the image to look for."""
+    """Snip a region and keep it as the image to look for. on_done gets the
+    saved file's path, or None if the user backed out."""
     def save(rect):
+        if rect is None:
+            on_done(None)
+            return
         frame = winapi.grab_screen(rect)
         folder = store.APP_DIR / "images"
         folder.mkdir(parents=True, exist_ok=True)
@@ -114,7 +133,7 @@ def capture_template(on_done):
         on_done(str(path))
 
     picker = ScreenPicker(region=True)
-    picker.picked.connect(save)
+    picker.finished.connect(save)
     picker.showFullScreen()
     capture_template._keep = picker
 
@@ -180,19 +199,35 @@ class StepDialog(QDialog):
         line.addWidget(pick)
         return row
 
-    def _pick_into(self, widgets, with_colour=False):
-        window = self.window()
-        window.hide()
+    def _step_aside(self, pick, apply):
+        """Hide this dialog and the window under it, so neither is in the way of
+        (or in) what gets picked, and bring both back afterwards - also when the
+        user backs out, which passes None and skips `apply`.
 
-        def done(point):
+        Callers must open() this dialog, never exec() it: hiding a dialog that is
+        inside exec() ends that call with Rejected, and the step being added was
+        silently thrown away."""
+        main = self.parentWidget()
+        self.hide()
+        main.hide()
+
+        def back(result):
+            if result is not None:
+                apply(result)  # before our windows return, so they can't cover it
+            main.show()
+            self.open()
+
+        pick(back)
+
+    def _pick_into(self, widgets, with_colour=False):
+        def apply(point):
             widgets["x"].setValue(point[0])
             widgets["y"].setValue(point[1])
             if with_colour:
                 red, green, blue = winapi.pixel_color(point[0], point[1])
                 widgets["color"].setText(f"#{red:02x}{green:02x}{blue:02x}")
-            window.show()
 
-        pick_point(done)
+        self._step_aside(pick_point, apply)
 
     def _image_row(self, widgets):
         widgets["path"] = QLineEdit()
@@ -216,14 +251,7 @@ class StepDialog(QDialog):
             widgets["path"].setText(path)
 
     def _snip_into(self, widgets):
-        window = self.window()
-        window.hide()
-
-        def done(path):
-            widgets["path"].setText(path)
-            window.show()
-
-        capture_template(done)
+        self._step_aside(capture_template, widgets["path"].setText)
 
     def _page_click(self, form):
         widgets = {}
@@ -413,11 +441,16 @@ class SequenceEditor(QWidget):
         walk(self.tree.invisibleRootItem())
 
     # -- actions
+    def _open(self, dialog, on_accepted):
+        # open(), not exec(): see StepDialog._step_aside
+        dialog.accepted.connect(lambda: on_accepted(dialog.step()))
+        dialog.finished.connect(dialog.deleteLater)
+        dialog.open()
+
     def add(self):
-        dialog = StepDialog(parent=self.window())
-        if dialog.exec() != QDialog.Accepted:
-            return
-        step = dialog.step()
+        self._open(StepDialog(parent=self.window()), self._insert)
+
+    def _insert(self, step):
         path = self._selected_path()
         if path is None:
             self.steps.append(step)
@@ -440,17 +473,17 @@ class SequenceEditor(QWidget):
             return
         container = self._container(path)
         current = container[path[-1]]
-        dialog = StepDialog(current, parent=self.window())
-        if dialog.exec() != QDialog.Accepted:
-            return
-        updated = dialog.step()
-        for key in engine.children_keys(updated):      # keep nested steps on edit
-            if key in current:
-                updated[key] = current[key]
-        container[path[-1]] = updated
-        self.rebuild()
-        self._select(path)
-        self.changed.emit()
+
+        def replace(updated):
+            for key in engine.children_keys(updated):      # keep nested steps on edit
+                if key in current:
+                    updated[key] = current[key]
+            container[path[-1]] = updated
+            self.rebuild()
+            self._select(path)
+            self.changed.emit()
+
+        self._open(StepDialog(current, parent=self.window()), replace)
 
     def duplicate(self):
         path = self._selected_path()
