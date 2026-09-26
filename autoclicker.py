@@ -79,6 +79,18 @@ class AutoClicker(QWidget):
         self.status.setWordWrap(True)  # a note plus the hint is longer than the window
         body.addWidget(self.status)
 
+        link = 'style="color: rgba(232,234,237,0.7);"'
+        links = QLabel(
+            f'<a {link} href="https://protagonistlabs.app/autoclicker/?utm_source=app&utm_medium=autoclicker">Website</a>'
+            f' · Feedback: <a {link} href="mailto:feedback@protagonistlabs.app?subject=Auto%20Clicker%20feedback">feedback@protagonistlabs.app</a>'
+            f'<br><a {link} href="https://protagonistlabs.app/?utm_source=app&utm_medium=autoclicker">More apps from Protagonist Labs</a>',
+            objectName="hint")
+        links.setAlignment(Qt.AlignCenter)
+        links.setWordWrap(True)
+        links.setOpenExternalLinks(True)  # QDesktopServices.openUrl
+        links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
+        body.addWidget(links)
+
         root.addLayout(body)
         self._set_status()
 
