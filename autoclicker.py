@@ -81,9 +81,9 @@ class AutoClicker(QWidget):
 
         link = 'style="color: rgba(232,234,237,0.7);"'
         links = QLabel(
-            f'<a {link} href="https://protagonistlabs.app/autoclicker/?utm_source=app&utm_medium=autoclicker">Website</a>'
+            f'<a {link} href="https://protagonistlabs.app/autoclicker/?utm_source=autoclicker&utm_medium=app&utm_campaign=footer">Website</a>'
             f' · Feedback: <a {link} href="mailto:feedback@protagonistlabs.app?subject=Auto%20Clicker%20feedback">feedback@protagonistlabs.app</a>'
-            f'<br><a {link} href="https://protagonistlabs.app/?utm_source=app&utm_medium=autoclicker">More apps from Protagonist Labs</a>',
+            f'<br><a {link} href="https://protagonistlabs.app/?utm_source=autoclicker&utm_medium=app&utm_campaign=more-apps">More apps from Protagonist Labs</a>',
             objectName="hint")
         links.setAlignment(Qt.AlignCenter)
         links.setWordWrap(True)
