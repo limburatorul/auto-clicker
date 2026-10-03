@@ -56,3 +56,9 @@ directly.
 | `store.py` | settings and profiles on disk |
 | `theme.py` | the one stylesheet |
 | `site/` | the presentation page — `page.template.html` is the source, `build_page.py` inlines `screenshots/` into `site.html` |
+
+## More from Protagonist Labs
+
+- [HotkeyScan](https://protagonistlabs.app/hotkeyscan/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): finds which program already holds a hotkey, free.
+- [Shelf](https://protagonistlabs.app/shelf/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): every PC game from every launcher in one library.
+- [All apps](https://protagonistlabs.app/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): Windows apps that each do one job properly.
