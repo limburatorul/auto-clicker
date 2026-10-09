@@ -21,6 +21,63 @@ import winapi
 
 BRANCH_TITLES = {"steps": "Do", "then": "Then", "otherwise": "Else"}
 
+UNITS = (("ms", 1), ("s", 1000), ("min", 60000))
+MAX_MS = 3600000
+
+
+class DurationBox(QWidget):
+    """A number and a unit. Everything outside speaks milliseconds, so the saved
+    profiles and steps don't change: 90000 simply shows up as 90 s."""
+
+    valueChanged = Signal(int)
+
+    def __init__(self, value=100):
+        super().__init__()
+        self.amount = QSpinBox()
+        self.amount.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.amount.setButtonSymbols(QSpinBox.NoButtons)
+        self.amount.setFixedWidth(68)
+        self.unit = QComboBox()
+        for name, factor in UNITS:
+            self.unit.addItem(name, factor)
+        self.unit.setFixedWidth(62)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(self.amount)
+        row.addWidget(self.unit)
+        self._fit()
+        self.setValue(value)
+        self.amount.valueChanged.connect(lambda: self.valueChanged.emit(self.value()))
+        self.unit.currentIndexChanged.connect(self._unit_changed)
+
+    def _fit(self):
+        factor = self.unit.currentData()
+        self.amount.setRange(1, MAX_MS // factor)
+        self.amount.setSingleStep(10 if factor == 1 else 1)
+
+    def _unit_changed(self):
+        self._fit()
+        self.valueChanged.emit(self.value())
+
+    def value(self):
+        return self.amount.value() * self.unit.currentData()
+
+    def setValue(self, milliseconds):
+        milliseconds = max(1, min(int(milliseconds), MAX_MS))
+        index = next(i for i in (2, 1, 0) if milliseconds % UNITS[i][1] == 0)
+        self.unit.blockSignals(True)
+        self.unit.setCurrentIndex(index)
+        self.unit.blockSignals(False)
+        self._fit()
+        self.amount.setValue(milliseconds // UNITS[index][1])
+
+    def stepUp(self):
+        self.amount.stepUp()
+
+    def stepDown(self):
+        self.amount.stepDown()
+
 
 # --- full screen pickers --------------------------------------------------
 
@@ -307,8 +364,7 @@ class StepDialog(QDialog):
         return widgets
 
     def _page_delay(self, form):
-        widgets = {"min": self._spin(1, 600000, 100, " ms"),
-                   "max": self._spin(1, 600000, 100, " ms")}
+        widgets = {"min": DurationBox(), "max": DurationBox()}
         form.addRow("At least", widgets["min"])
         form.addRow("At most", widgets["max"])
         form.addRow("", QLabel("Equal values mean a fixed delay.", objectName="hint"))
@@ -325,7 +381,7 @@ class StepDialog(QDialog):
         form.addRow("Image", self._image_row(widgets))
         widgets["confidence"] = self._spin(50, 100, 85, " %")
         form.addRow("Confidence", widgets["confidence"])
-        widgets["timeout"] = self._spin(100, 600000, 10000, " ms")
+        widgets["timeout"] = DurationBox(10000)
         form.addRow("Give up after", widgets["timeout"])
         return widgets
 
@@ -359,7 +415,7 @@ class StepDialog(QDialog):
             if key not in step:
                 continue
             value = step[key]
-            if isinstance(widget, QSpinBox):
+            if isinstance(widget, (QSpinBox, DurationBox)):
                 widget.setValue(int(value * 100) if key == "confidence" else int(value))
             elif isinstance(widget, QLineEdit):
                 widget.setText(str(value))
@@ -374,7 +430,7 @@ class StepDialog(QDialog):
         kind = self.kind.currentData()
         result = {"type": kind}
         for key, widget in self.builders[kind].items():
-            if isinstance(widget, QSpinBox):
+            if isinstance(widget, (QSpinBox, DurationBox)):
                 result[key] = widget.value() / 100 if key == "confidence" else widget.value()
             elif isinstance(widget, QLineEdit):
                 result[key] = widget.text().strip()
