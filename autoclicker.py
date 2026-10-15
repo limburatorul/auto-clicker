@@ -4,14 +4,16 @@ import ctypes
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 import urllib.request
 from ctypes import wintypes
 
-from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import (QColor, QIcon, QKeySequence, QPainter, QPalette,
-                           QPen)
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import (QColor, QDesktopServices, QIcon, QKeySequence,
+                           QPainter, QPalette, QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
                                QHBoxLayout, QInputDialog, QLabel, QListWidget,
                                QMenu, QMessageBox, QPushButton, QSpinBox,
@@ -23,7 +25,7 @@ import store
 import theme
 import winapi
 
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
@@ -84,6 +86,89 @@ def update_in_place():
         return None
 
 
+# -- the Protagonist Labs apps ----------------------------------------------
+# They find each other through %APPDATA%\ProtagonistLabs: each one writes a card about itself into
+# apps\. Auto Clicker writes its own and reads HotkeyScan's, which can name the app holding a taken
+# hotkey. A card that is missing, malformed or points at an exe that is gone means "not installed".
+SHARED_APPS = os.path.join(os.environ.get("APPDATA", ""), "ProtagonistLabs", "apps")
+PAID = (("shelf", "Shelf"), ("stash", "Stash"), ("frostpane", "Frostpane"), ("reel", "Reel"),
+        ("planner", "Planner"), ("reminder", "Reminder"))
+UTM = "utm_source=autoclicker&utm_medium=app&utm_campaign=works-with"
+# HotkeyScan's names for the keys that are not a letter, a digit or an F-key
+HOTKEYSCAN_KEYS = {0x20: "Space", 0x09: "Tab", 0x0D: "Enter", 0x08: "Backspace", 0x2D: "Insert",
+                   0x2E: "Delete", 0x24: "Home", 0x23: "End", 0x21: "PageUp", 0x22: "PageDown",
+                   0x25: "Left", 0x26: "Up", 0x27: "Right", 0x28: "Down", 0x2C: "PrintScreen",
+                   0x13: "Pause", 0x91: "ScrollLock", 0x14: "CapsLock", 0x90: "NumLock", 0x5D: "Apps",
+                   0x6A: "NumMul", 0x6B: "NumAdd", 0x6D: "NumSub", 0x6E: "NumDec", 0x6F: "NumDiv",
+                   0xBA: ";", 0xBB: "=", 0xBC: ",", 0xBD: "-", 0xBE: ".", 0xBF: "/", 0xC0: "`",
+                   0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'", 0xAD: "VolumeMute", 0xAE: "VolumeDown",
+                   0xAF: "VolumeUp", 0xB0: "MediaNext", 0xB1: "MediaPrev", 0xB2: "MediaStop", 0xB3: "MediaPlayPause"}
+
+
+def read_card(app_id):
+    try:
+        with open(os.path.join(SHARED_APPS, app_id + ".json"), encoding="utf-8-sig") as f:
+            card = json.load(f)
+        if card.get("schema") == 1 and isinstance(card.get("exe"), str) and os.path.isfile(card["exe"]):
+            return card
+    except (OSError, ValueError, AttributeError):
+        pass
+    return None
+
+
+def write_card():
+    if not getattr(sys, "frozen", False):
+        return  # run from source it is python.exe, which no sister should ever start
+    card = {"schema": 1, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "id": "autoclicker", "name": "Auto Clicker", "version": VERSION, "exe": sys.executable,
+            "edition": "free", "paid": False, "page": "https://protagonistlabs.app/autoclicker/",
+            "commands": {}}
+    path = os.path.join(SHARED_APPS, "autoclicker.json")
+    try:
+        os.makedirs(SHARED_APPS, exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(card, f, indent=2)
+        os.replace(path + ".tmp", path)
+    except OSError:
+        pass
+
+
+def hotkeyscan_combo(hotkey):
+    """Auto Clicker names keys the way Qt prints them ("Ctrl+!" for Ctrl+Shift+1); HotkeyScan wants
+    the key itself, so the name is rebuilt from the modifiers and the virtual-key code."""
+    parts = [name for bit, name in ((winapi.MOD_CONTROL, "Ctrl"), (winapi.MOD_ALT, "Alt"),
+                                    (winapi.MOD_SHIFT, "Shift"), (winapi.MOD_WIN, "Win"))
+             if hotkey["mods"] & bit]
+    vk = hotkey["vk"]
+    if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:
+        parts.append(chr(vk))
+    elif 0x70 <= vk <= 0x87:
+        parts.append(f"F{vk - 0x6F}")
+    elif 0x60 <= vk <= 0x69:
+        parts.append(f"Num{vk - 0x60}")
+    else:
+        parts.append(HOTKEYSCAN_KEYS.get(vk, hotkey["name"].split("+")[-1]))
+    return "+".join(parts)
+
+
+def works_with_html(link):
+    """The footer's Works with: HotkeyScan, and one quiet line of 30% off for owners of a paid app."""
+    cards = {app_id: read_card(app_id) for app_id in ("hotkeyscan",) + tuple(p[0] for p in PAID)}
+    if cards["hotkeyscan"]:
+        lines = ["HotkeyScan · shows which app holds a taken hotkey"]
+    else:
+        lines = [f'<a {link} href="https://protagonistlabs.app/hotkeyscan/?{UTM}">HotkeyScan</a>'
+                 " · would show which app holds a taken hotkey"]
+    bought = any(c and c.get("paid") is True and c.get("edition") == "full" for c in cards.values())
+    missing = [(i, n) for i, n in PAID if not cards[i]][:4]
+    if bought and missing:
+        names = " · ".join(f'<a {link} href="https://protagonistlabs.app/{i}/?code='
+                           f'{"SECOND30SHELF" if i == "shelf" else "SECOND30"}&{UTM}">{n}</a>'
+                           for i, n in missing)
+        lines.append("Owners of one of our apps get 30% off the others: " + names)
+    return "Works with<br>" + "<br>".join(lines)
+
+
 class _Updated(QObject):
     """Carries the result of the background update back to the window's thread."""
     done = Signal(str)
@@ -137,6 +222,8 @@ class AutoClicker(QWidget):
 
         self.status = QLabel("", objectName="status")
         self.status.setAlignment(Qt.AlignCenter)
+        self.status.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        self.status.linkActivated.connect(self._see_who_holds)
         self.status.setWordWrap(True)  # a note plus the hint is longer than the window
         body.addWidget(self.status)
 
@@ -151,6 +238,19 @@ class AutoClicker(QWidget):
         links.setOpenExternalLinks(True)  # QDesktopServices.openUrl
         links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
         body.addWidget(links)
+
+        # The sister apps, read from their cards off the UI thread.
+        self.works = QLabel("", objectName="hint")
+        self.works.setAlignment(Qt.AlignCenter)
+        self.works.setWordWrap(True)
+        self.works.setOpenExternalLinks(True)
+        self.works.hide()
+        body.addWidget(self.works)
+        self._works_done = _Updated()
+        self._works_done.done.connect(self._on_works_with)
+        quiet = 'style="color: rgba(232,234,237,0.45); text-decoration: none;"'
+        threading.Thread(target=lambda: (write_card(), self._works_done.done.emit(works_with_html(quiet))),
+                         daemon=True).start()
 
         # Shown after the first run: one app we make, with a code for Auto Clicker's users.
         self.offer = QLabel(
@@ -512,6 +612,10 @@ class AutoClicker(QWidget):
             self.updated.setText(f"Auto Clicker {version} is downloaded and checked. It starts the next time you open Auto Clicker.")
             self.updated.show()
 
+    def _on_works_with(self, html):
+        self.works.setText(html)
+        self.works.show()
+
     def _set_status(self):
         running = bool(self.runner and self.runner.isRunning())
         name = self.config.hotkey["name"]
@@ -537,9 +641,26 @@ class AutoClicker(QWidget):
         hotkey = self.config.hotkey
         if not winapi.register_hotkey(int(self.winId()), HOTKEY_ID,
                                       hotkey["mods"], hotkey["vk"]):
-            self.status.setText(f"{hotkey['name']} is taken by another app")
+            link = 'style="color: rgba(232,234,237,0.8);"'
+            self.status.setText(f"{hotkey['name']} is taken by another app · "
+                                f'<a {link} href="#">See who holds it</a>')
             return False
         return True
+
+    def _see_who_holds(self, _href):
+        """HotkeyScan --check names the app holding the hotkey; without HotkeyScan, its page."""
+        card = read_card("hotkeyscan")
+        commands = card.get("commands") if card else None
+        check = commands.get("check") if isinstance(commands, dict) else None
+        if isinstance(check, list):
+            combo = hotkeyscan_combo(self.config.hotkey)
+            try:
+                subprocess.Popen([card["exe"]] + [str(a).replace("{combo}", combo) for a in check])
+                return
+            except OSError:
+                pass
+        QDesktopServices.openUrl(QUrl("https://protagonistlabs.app/hotkeyscan/?utm_source=autoclicker"
+                                      "&utm_medium=app&utm_campaign=hotkey-taken"))
 
     def _capture_hotkey(self, checked):
         self.hotkey_btn.setText("Press a key…" if checked else self.config.hotkey["name"])
