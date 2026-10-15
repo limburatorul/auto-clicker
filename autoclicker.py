@@ -1,11 +1,15 @@
 """Auto Clicker - clicks where the cursor is, or runs a sequence you built."""
 
 import ctypes
+import hashlib
+import json
 import os
 import sys
+import threading
+import urllib.request
 from ctypes import wintypes
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QIcon, QKeySequence, QPainter, QPalette,
                            QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
@@ -19,6 +23,9 @@ import store
 import theme
 import winapi
 
+VERSION = "1.0.8"
+RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
+
 HOTKEY_ID = 1
 WM_NCHITTEST = 0x0084
 BORDER = 6
@@ -26,6 +33,60 @@ HIT_CODES = {(True, False, True, False): 13, (True, False, False, True): 14,
              (False, True, True, False): 16, (False, True, False, True): 17,
              (True, False, False, False): 12, (False, True, False, False): 15,
              (False, False, True, False): 10, (False, False, False, True): 11}
+
+
+def update_in_place():
+    """Auto Clicker is one portable .exe, so it updates itself in place: the newest GitHub release's .exe
+    is downloaded beside the running one, checked against the size and SHA-256 GitHub published for it,
+    and swapped in. Windows lets a running .exe be renamed, so the old one steps aside as <name>.old
+    (deleted at the next start) and nothing has to close; the next start is the new version. Returns
+    that version, or None: run from source, up to date, offline, or a folder it may not write to."""
+    if not getattr(sys, "frozen", False):
+        return None
+    exe = sys.executable
+    try:
+        os.remove(exe + ".old")
+    except OSError:
+        pass
+    fresh = exe + ".new"
+    try:
+        request = urllib.request.Request(RELEASES, headers={"User-Agent": "Auto Clicker"})
+        with urllib.request.urlopen(request, timeout=30) as r:
+            release = json.load(r)
+        tag = release["tag_name"].lstrip("vV")
+        if tuple(map(int, tag.split("."))) <= tuple(map(int, VERSION.split("."))):
+            return None
+        asset = next(a for a in release["assets"] if a["name"].lower().endswith(".exe"))
+        digest = asset.get("digest") or ""
+        if not digest.startswith("sha256:"):
+            return None  # nothing to check it against: never run
+        sha = hashlib.sha256()
+        with urllib.request.urlopen(asset["browser_download_url"], timeout=60) as r, open(fresh, "wb") as f:
+            while chunk := r.read(1 << 16):
+                f.write(chunk)
+                sha.update(chunk)
+        # the size catches a cut-off download, the checksum everything else
+        if os.path.getsize(fresh) != asset["size"] or sha.hexdigest() != digest[7:].lower():
+            os.remove(fresh)
+            return None
+        os.replace(exe, exe + ".old")
+        try:
+            os.replace(fresh, exe)
+        except OSError:
+            os.replace(exe + ".old", exe)  # never leave the folder without its .exe
+            raise
+        return tag
+    except (OSError, ValueError, KeyError, StopIteration):
+        try:
+            os.remove(fresh)
+        except OSError:
+            pass
+        return None
+
+
+class _Updated(QObject):
+    """Carries the result of the background update back to the window's thread."""
+    done = Signal(str)
 
 
 class AutoClicker(QWidget):
@@ -90,6 +151,29 @@ class AutoClicker(QWidget):
         links.setOpenExternalLinks(True)  # QDesktopServices.openUrl
         links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
         body.addWidget(links)
+
+        # Shown after the first run: one app we make, with a code for Auto Clicker's users.
+        self.offer = QLabel(
+            f'Play PC games? <a {link} href="https://protagonistlabs.app/shelf/?code=FREEAPP30&utm_source=autoclicker'
+            f'&utm_medium=app&utm_campaign=recommend#pricing">Shelf</a>, our game library that also backs up '
+            f'your saves, is 30% off for Auto Clicker users.', objectName="hint")
+        self.offer.setAlignment(Qt.AlignCenter)
+        self.offer.setWordWrap(True)
+        self.offer.setOpenExternalLinks(True)
+        self.offer.hide()
+        body.addWidget(self.offer)
+
+        self.updated = QLabel("", objectName="hint")
+        self.updated.setAlignment(Qt.AlignCenter)
+        self.updated.setWordWrap(True)
+        self.updated.hide()
+        body.addWidget(self.updated)
+        self._update_done = _Updated()
+        self._update_done.done.connect(self._on_updated)
+        self._check_update()
+        # the window may stay open for days: a release published meanwhile is fetched too
+        self._update_timer = QTimer(self, interval=6 * 3600 * 1000, timeout=self._check_update)
+        self._update_timer.start()
 
         root.addLayout(body)
         self._set_status()
@@ -418,6 +502,15 @@ class AutoClicker(QWidget):
 
     def _on_stopped(self):
         self._set_running(False)
+        self.offer.show()
+
+    def _check_update(self):
+        threading.Thread(target=lambda: self._update_done.done.emit(update_in_place() or ""), daemon=True).start()
+
+    def _on_updated(self, version):
+        if version:
+            self.updated.setText(f"Auto Clicker {version} is downloaded and checked. It starts the next time you open Auto Clicker.")
+            self.updated.show()
 
     def _set_status(self):
         running = bool(self.runner and self.runner.isRunning())
