@@ -25,7 +25,7 @@ import store
 import theme
 import winapi
 
-VERSION = "1.0.9"
+VERSION = "1.0.10"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
@@ -37,12 +37,20 @@ HIT_CODES = {(True, False, True, False): 13, (True, False, False, True): 14,
              (False, False, True, False): 10, (False, False, False, True): 11}
 
 
+_waiting = None  # the version swapped in and waiting for the next start
+
+
 def update_in_place():
     """Auto Clicker is one portable .exe, so it updates itself in place: the newest GitHub release's .exe
     is downloaded beside the running one, checked against the size and SHA-256 GitHub published for it,
     and swapped in. Windows lets a running .exe be renamed, so the old one steps aside as <name>.old
     (deleted at the next start) and nothing has to close; the next start is the new version. Returns
     that version, or None: run from source, up to date, offline, or a folder it may not write to."""
+    global _waiting
+    # Already swapped in: the running copy is now the .old, so a second download could never be
+    # swapped in and would only cost another 88 MB every check. Nothing more until the next start.
+    if _waiting:
+        return _waiting
     if not getattr(sys, "frozen", False):
         return None
     exe = sys.executable
@@ -77,6 +85,7 @@ def update_in_place():
         except OSError:
             os.replace(exe + ".old", exe)  # never leave the folder without its .exe
             raise
+        _waiting = tag
         return tag
     except (OSError, ValueError, KeyError, StopIteration):
         try:
@@ -271,8 +280,8 @@ class AutoClicker(QWidget):
         self._update_done = _Updated()
         self._update_done.done.connect(self._on_updated)
         self._check_update()
-        # the window may stay open for days: a release published meanwhile is fetched too
-        self._update_timer = QTimer(self, interval=6 * 3600 * 1000, timeout=self._check_update)
+        # the window may stay open for days: a release published meanwhile is fetched within the hour
+        self._update_timer = QTimer(self, interval=3600 * 1000, timeout=self._check_update)
         self._update_timer.start()
 
         root.addLayout(body)
