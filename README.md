@@ -31,19 +31,23 @@ for input, the global hotkey, acrylic window effects, and screen capture.
 ## Building the .exe
 
 ```bash
-python -m PyInstaller --noconfirm --onefile --windowed --name "Auto Clicker" \
-  --icon app.ico --add-data "app.ico;." \
-  --distpath . --workpath build --specpath build \
-  --exclude-module tkinter --exclude-module PIL \
-  --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick \
-  --exclude-module PySide6.QtQuickWidgets --exclude-module PySide6.QtOpenGL \
-  --exclude-module PySide6.QtNetwork --exclude-module PySide6.QtDBus \
-  autoclicker.py
+.venv/Scripts/python -m PyInstaller --noconfirm autoclicker.spec --distpath . --workpath build
 ```
 
-Once a `build/Auto Clicker.spec` exists, `python -m PyInstaller --noconfirm
-build/"Auto Clicker.spec" --distpath . --workpath build` rebuilds from it
-directly.
+`autoclicker.spec` takes the version from `VERSION` in `autoclicker.py` and writes it, with
+Protagonist Labs as the company, into the exe's version resource. It never packs with UPX.
+
+`.venv` is a build environment whose PyInstaller has a bootloader compiled here from source,
+not the prebuilt one every PyInstaller app shares (antivirus engines learn that one from
+malware built with it). To set it up once (Python 3.11, PySide6 installed, MSVC build tools):
+
+```bash
+python -m venv --system-site-packages .venv
+.venv/Scripts/python -m pip download pyinstaller==6.20.0 --no-binary :all: --no-deps -d .venv/src
+tar xzf .venv/src/pyinstaller-6.20.0.tar.gz -C .venv/src
+cd .venv/src/pyinstaller-6.20.0/bootloader && ../../../Scripts/python ./waf all --target-arch=64bit
+cd .. && ../../Scripts/python -m pip install --no-deps .
+```
 
 ## Project layout
 

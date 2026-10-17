@@ -25,7 +25,7 @@ import store
 import theme
 import winapi
 
-VERSION = "1.0.10"
+VERSION = "1.0.11"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
