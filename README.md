@@ -63,6 +63,8 @@ cd .. && ../../Scripts/python -m pip install --no-deps .
 
 ## More from Protagonist Labs
 
-- [HotkeyScan](https://protagonistlabs.app/hotkeyscan/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): finds which program already holds a hotkey, free.
+- [HotkeyScan](https://protagonistlabs.app/hotkeyscan/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): finds which program already holds a hotkey, free. Auto Clicker lists its own hotkey,
+  and whether it holds it right now, in its card under `%APPDATA%\ProtagonistLabspps\`, so HotkeyScan
+  can tell when two of our apps want the same keys.
 - [Shelf](https://protagonistlabs.app/shelf/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): every PC game from every launcher in one library.
 - [All apps](https://protagonistlabs.app/?utm_source=github&utm_medium=readme&utm_campaign=autoclicker): Windows apps that each do one job properly.

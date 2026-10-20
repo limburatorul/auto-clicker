@@ -25,7 +25,7 @@ import store
 import theme
 import winapi
 
-VERSION = "1.0.11"
+VERSION = "1.0.12"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
@@ -97,8 +97,8 @@ def update_in_place():
 
 # -- the Protagonist Labs apps ----------------------------------------------
 # They find each other through %APPDATA%\ProtagonistLabs: each one writes a card about itself into
-# apps\. Auto Clicker writes its own and reads HotkeyScan's, which can name the app holding a taken
-# hotkey. A card that is missing, malformed or points at an exe that is gone means "not installed".
+# apps\. Auto Clicker writes its own, with the global hotkey it holds (so HotkeyScan can tell a clash
+# between our apps), and reads HotkeyScan's, which can name the app holding a taken hotkey. A card that is missing, malformed or points at an exe that is gone means "not installed".
 SHARED_APPS = os.path.join(os.environ.get("APPDATA", ""), "ProtagonistLabs", "apps")
 PAID = (("shelf", "Shelf"), ("stash", "Stash"), ("frostpane", "Frostpane"), ("reel", "Reel"),
         ("planner", "Planner"), ("reminder", "Reminder"))
@@ -110,8 +110,8 @@ HOTKEYSCAN_KEYS = {0x20: "Space", 0x09: "Tab", 0x0D: "Enter", 0x08: "Backspace",
                    0x13: "Pause", 0x91: "ScrollLock", 0x14: "CapsLock", 0x90: "NumLock", 0x5D: "Apps",
                    0x6A: "NumMul", 0x6B: "NumAdd", 0x6D: "NumSub", 0x6E: "NumDec", 0x6F: "NumDiv",
                    0xBA: ";", 0xBB: "=", 0xBC: ",", 0xBD: "-", 0xBE: ".", 0xBF: "/", 0xC0: "`",
-                   0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'", 0xAD: "VolumeMute", 0xAE: "VolumeDown",
-                   0xAF: "VolumeUp", 0xB0: "MediaNext", 0xB1: "MediaPrev", 0xB2: "MediaStop", 0xB3: "MediaPlayPause"}
+                   0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'", 0xE2: "OEM102", 0xAD: "VolumeMute",
+                   0xAE: "VolumeDown", 0xAF: "VolumeUp", 0xB0: "MediaNext", 0xB1: "MediaPrev", 0xB2: "MediaStop", 0xB3: "MediaPlayPause"}
 
 
 def read_card(app_id):
@@ -125,13 +125,17 @@ def read_card(app_id):
     return None
 
 
-def write_card():
+def write_card(hotkey, registered):
+    """Rewritten whenever the hotkey is registered, fails to register, changes or is let go, so
+    hotkeys[].registered says whether Auto Clicker holds it right now."""
     if not getattr(sys, "frozen", False):
         return  # run from source it is python.exe, which no sister should ever start
     card = {"schema": 1, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "id": "autoclicker", "name": "Auto Clicker", "version": VERSION, "exe": sys.executable,
             "edition": "free", "paid": False, "page": "https://protagonistlabs.app/autoclicker/",
-            "commands": {}}
+            "commands": {},
+            "hotkeys": [{"combo": hotkeyscan_combo(hotkey), "does": "Starts and stops clicking",
+                         "registered": registered}]}
     path = os.path.join(SHARED_APPS, "autoclicker.json")
     try:
         os.makedirs(SHARED_APPS, exist_ok=True)
@@ -145,8 +149,9 @@ def write_card():
 def hotkeyscan_combo(hotkey):
     """Auto Clicker names keys the way Qt prints them ("Ctrl+!" for Ctrl+Shift+1); HotkeyScan wants
     the key itself, so the name is rebuilt from the modifiers and the virtual-key code."""
-    parts = [name for bit, name in ((winapi.MOD_CONTROL, "Ctrl"), (winapi.MOD_ALT, "Alt"),
-                                    (winapi.MOD_SHIFT, "Shift"), (winapi.MOD_WIN, "Win"))
+    # In HotkeyScan's own order (Combo.ToString), so the text matches as well as parses.
+    parts = [name for bit, name in ((winapi.MOD_WIN, "Win"), (winapi.MOD_CONTROL, "Ctrl"),
+                                    (winapi.MOD_ALT, "Alt"), (winapi.MOD_SHIFT, "Shift"))
              if hotkey["mods"] & bit]
     vk = hotkey["vk"]
     if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:
@@ -164,7 +169,7 @@ def works_with_html(link):
     """The footer's Works with: HotkeyScan, and one quiet line of 30% off for owners of a paid app."""
     cards = {app_id: read_card(app_id) for app_id in ("hotkeyscan",) + tuple(p[0] for p in PAID)}
     if cards["hotkeyscan"]:
-        lines = ["HotkeyScan · shows which app holds a taken hotkey"]
+        lines = ["HotkeyScan · knows Auto Clicker's hotkey, and shows which app holds a taken one"]
     else:
         lines = [f'<a {link} href="https://protagonistlabs.app/hotkeyscan/?{UTM}">HotkeyScan</a>'
                  " · would show which app holds a taken hotkey"]
@@ -258,7 +263,7 @@ class AutoClicker(QWidget):
         self._works_done = _Updated()
         self._works_done.done.connect(self._on_works_with)
         quiet = 'style="color: rgba(232,234,237,0.45); text-decoration: none;"'
-        threading.Thread(target=lambda: (write_card(), self._works_done.done.emit(works_with_html(quiet))),
+        threading.Thread(target=lambda: self._works_done.done.emit(works_with_html(quiet)),
                          daemon=True).start()
 
         # Shown after the first run: one app we make, with a code for Auto Clicker's users.
@@ -643,13 +648,15 @@ class AutoClicker(QWidget):
             self.runner.stop()
             self.runner.wait(2000)
         winapi.unregister_hotkey(int(self.winId()), HOTKEY_ID)
+        write_card(self.config.hotkey, False)
         self.config.save()
         super().closeEvent(event)
 
     def _register(self):
         hotkey = self.config.hotkey
-        if not winapi.register_hotkey(int(self.winId()), HOTKEY_ID,
-                                      hotkey["mods"], hotkey["vk"]):
+        registered = winapi.register_hotkey(int(self.winId()), HOTKEY_ID, hotkey["mods"], hotkey["vk"])
+        write_card(hotkey, registered)
+        if not registered:
             link = 'style="color: rgba(232,234,237,0.8);"'
             self.status.setText(f"{hotkey['name']} is taken by another app · "
                                 f'<a {link} href="#">See who holds it</a>')
