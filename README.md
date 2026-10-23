@@ -57,7 +57,8 @@ cd .. && ../../Scripts/python -m pip install --no-deps .
 | `engine.py` | the step model and the thread that runs a sequence |
 | `editor.py` | the step dialog, the sequence tree, the screen/image pickers |
 | `winapi.py` | everything that talks to Windows directly |
-| `store.py` | settings and profiles on disk |
+| `store.py` | settings, profiles and captured images on disk, in `%APPDATA%\ProtagonistLabs\Auto Clicker` (moved there from `%APPDATA%\AutoClicker` at the first start of 1.1.0) |
+| `whatsnew.py`, `whatsnew.txt` | the What's new window and its notes, built into the exe |
 | `theme.py` | the one stylesheet |
 | `site/` | the presentation page — `page.template.html` is the source, `build_page.py` inlines `screenshots/` into `site.html` |
 

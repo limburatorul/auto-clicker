@@ -25,7 +25,7 @@ version = VSVersionInfo(
 
 a = Analysis(
     ['autoclicker.py'],
-    datas=[('app.ico', '.')],
+    datas=[('app.ico', '.'), ('whatsnew.txt', '.')],
     excludes=['tkinter', 'PIL', 'PySide6.QtQml', 'PySide6.QtQuick', 'PySide6.QtQuickWidgets', 'PySide6.QtOpenGL',
               'PySide6.QtNetwork', 'PySide6.QtDBus'],
 )

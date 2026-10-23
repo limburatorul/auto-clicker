@@ -23,9 +23,10 @@ import editor
 import engine
 import store
 import theme
+import whatsnew
 import winapi
 
-VERSION = "1.0.12"
+VERSION = "1.1.0"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
@@ -132,6 +133,7 @@ def write_card(hotkey, registered):
         return  # run from source it is python.exe, which no sister should ever start
     card = {"schema": 1, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "id": "autoclicker", "name": "Auto Clicker", "version": VERSION, "exe": sys.executable,
+            "data": str(store.APP_DIR),
             "edition": "free", "paid": False, "page": "https://protagonistlabs.app/autoclicker/",
             "commands": {},
             "hotkeys": [{"combo": hotkeyscan_combo(hotkey), "does": "Starts and stops clicking",
@@ -245,11 +247,13 @@ class AutoClicker(QWidget):
         links = QLabel(
             f'<a {link} href="https://protagonistlabs.app/autoclicker/?utm_source=autoclicker&utm_medium=app&utm_campaign=footer">Website</a>'
             f' · Feedback: <a {link} href="mailto:feedback@protagonistlabs.app?subject=Auto%20Clicker%20feedback">feedback@protagonistlabs.app</a>'
-            f'<br><a {link} href="https://protagonistlabs.app/?utm_source=autoclicker&utm_medium=app&utm_campaign=more-apps">More apps from Protagonist Labs</a>',
+            f'<br><a {link} href="#whatsnew">What&#39;s new</a>'
+            f' · <a {link} href="https://protagonistlabs.app/?utm_source=autoclicker&utm_medium=app&utm_campaign=more-apps">More apps from Protagonist Labs</a>',
             objectName="hint")
         links.setAlignment(Qt.AlignCenter)
         links.setWordWrap(True)
-        links.setOpenExternalLinks(True)  # QDesktopServices.openUrl
+        links.linkActivated.connect(lambda href: whatsnew.WhatsNew.open(self, self.config, VERSION) if href == "#whatsnew"
+                                    else QDesktopServices.openUrl(QUrl(href)))
         links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
         body.addWidget(links)
 
@@ -782,8 +786,10 @@ def main():
     app.setStyleSheet(theme.QSS)  # app-level: popups (combo lists, menus) are
                                   # separate top-level windows, outside a
                                   # widget-level stylesheet's reach
+    store.move_old_data()  # before anything reads the settings
     window = AutoClicker()
     window.show()
+    whatsnew.WhatsNew.show_once(window, window.config, VERSION, window.config.existed)
     sys.exit(app.exec())
 
 

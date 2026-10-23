@@ -1,0 +1,49 @@
+# What's new, built into the exe (whatsnew.py reads it). Newest first.
+# "## version | yyyy-mm-dd | title", then the notes: "- " a point, "**bold**" inside a line.
+
+## 1.1.0 | 2026-10-23 | One home for your settings, and this window
+- **What's new lives here now.** Every release, by month, with what changed. It opens once after an update, and any time from **What's new** under the Start button.
+- **Your profiles, sequences and captured images moved** to `%APPDATA%\ProtagonistLabs\Auto Clicker`, beside the other Protagonist Labs apps. It happened by itself the first time 1.1 started; your image steps still find their pictures.
+- Auto Clicker is still one portable .exe: keep it wherever you like.
+
+## 1.0.12 | 2026-10-20 | HotkeyScan knows your hotkey
+- Auto Clicker tells HotkeyScan which hotkey it holds, so a clash with another of our apps shows up there.
+
+## 1.0.11 | 2026-10-17 | An exe that says whose it is
+- The .exe now names Protagonist Labs and its version, and is built on a loader made here, so fewer antivirus tools mistake it for something else.
+
+## 1.0.10 | 2026-10-16 | Hourly update checks
+- Checks for a new version every hour, and never downloads an update that is already waiting.
+
+## 1.0.9 | 2026-10-15 | See who holds it
+- If another app has taken your hotkey, **See who holds it** opens HotkeyScan with that key already checked.
+- A **Works with** line lists the sister apps.
+
+## 1.0.8 | 2026-10-15 | Auto Clicker updates itself
+- New versions are downloaded, checked and put in place on their own; the next start is the new one. A running click is never interrupted.
+
+## 1.0.7 | 2026-10-09 | Seconds and minutes
+- Intervals and delays in milliseconds, seconds or minutes, up to an hour.
+
+## 1.0.6 | 2026-09-26 | Links that say where they came from
+- Website and More apps tell protagonistlabs.app the visit came from Auto Clicker.
+
+## 1.0.5 | 2026-09-26 | Feedback and website
+- **Send feedback** and **Website** under the status line.
+
+## 1.0.4 | 2026-09-20 | Captures look like the real button
+- **Capture** takes the picture before the picker opens, so a button that lights up under the mouse is stored the way it normally looks.
+
+## 1.0.3 | 2026-09-20 | Click what you waited for
+- A Click step can go **On the last image found**: wait for a button, then click it.
+- When an image never shows up, the click is skipped and the status says why.
+
+## 1.0.2 | 2026-09-20 | Steps that stay
+- Steps made with **Capture** or **Pick on screen** are added again, and Esc in a picker brings the window back.
+
+## 1.0.1 | 2026-09-20 | An icon of its own
+- The target and pointer from its page, at every size from 16 to 256 px.
+
+## 1.0.0 | 2026-09-13 | The first Auto Clicker
+- One hotkey, intervals down to 1 ms, routes of saved points, and sequences that can wait for an image on screen before they click.
+- Profiles, and sequences saved as plain JSON. Everything free, no Pro tier.
