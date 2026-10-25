@@ -1,30 +1,28 @@
 """What's new, as the studio's other apps show it: every release on the left under the month it came out,
-the chosen one on the right under its 960 x 170 banner. The notes are whatsnew.txt, built into the exe,
+the chosen one on the right under its 960 x 170 picture. The notes are whatsnew.txt, built into the exe,
 so it works offline and shows every release. It opens once after an update (seen when it is closed, not
 when it opens) and from the What's new link under the Start button."""
 
 import ctypes
 import html
 import os
-import random
 import re
 import sys
 from datetime import date
 from ctypes import wintypes
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
                                QVBoxLayout, QWidget)
 
-# Auto Clicker's colours in the studio's banner template (Marketing\banners\banner.html)
-GOLD, PALE, GROUND1, GROUND2 = QColor("#ffc533"), QColor("#fff0a0"), QColor("#17140a"), QColor("#221c0c")
+# whatsnew.txt and the pictures: next to the script, or unpacked from the one-file exe into sys._MEIPASS
+BASE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 
 
 def releases():
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     found = []
-    with open(os.path.join(base, "whatsnew.txt"), encoding="utf-8") as f:
+    with open(os.path.join(BASE, "whatsnew.txt"), encoding="utf-8") as f:
         for line in f.read().splitlines():
             head = re.match(r"## (\S+) \| (\d{4}-\d\d-\d\d) \| (.+)", line)
             if head:
@@ -41,17 +39,25 @@ def _rich(text):
 
 
 class Banner(QWidget):
-    """960 x 170, smaller with the window but never taller than its width allows. Drawn in Auto Clicker's
-    colours: click ripples and pointers placed by a generator seeded with the version, so a release looks
-    the same every time and its neighbours never look alike."""
+    """960 x 170, smaller with the window but never taller than its width allows. The release's picture
+    (whatsnew/<x.y>.jpg), or the one for the month it came out in (whatsnew/m<MM>.jpg), built into the exe."""
 
     def __init__(self):
         super().__init__()
-        self.release = None
+        self.picture = QPixmap()
         policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
         self.setMaximumWidth(960)
+
+    def show_release(self, r):
+        minor = ".".join(r["version"].split(".")[:2])
+        for name in (f"{minor}.jpg", f"m{r['date'].month:02}.jpg"):
+            path = os.path.join(BASE, "whatsnew", name)
+            if os.path.exists(path):
+                self.picture = QPixmap(path)
+                break
+        self.update()
 
     def hasHeightForWidth(self):
         return True
@@ -63,51 +69,13 @@ class Banner(QWidget):
         self.setFixedHeight(self.heightForWidth(self.width()))
 
     def paintEvent(self, event):
-        if not self.release:
-            return
-        r = self.release
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
         clip = QPainterPath()
         clip.addRoundedRect(QRectF(self.rect()), 10, 10)
         p.setClipPath(clip)
-        p.scale(self.width() / 960, self.height() / 170)
-        ground = QLinearGradient(0, 0, 960, 170)
-        ground.setColorAt(0, GROUND1)
-        ground.setColorAt(0.55, GROUND2)
-        ground.setColorAt(1, QColor("#0d0d16"))
-        p.fillRect(QRectF(0, 0, 960, 170), ground)
-        rnd = random.Random(r["version"])
-        glow = QRadialGradient(QPointF(620 + rnd.random() * 200, 30), 320)
-        glow.setColorAt(0, QColor(255, 197, 51, 100))
-        glow.setColorAt(1, QColor(255, 197, 51, 0))
-        p.fillRect(QRectF(0, 0, 960, 170), glow)
-        for _ in range(4 + int(rnd.random() * 3)):
-            x, y = 470 + rnd.random() * 450, 20 + rnd.random() * 130
-            for ring in range(3):
-                colour = QColor(PALE if ring == 0 else GOLD)
-                colour.setAlpha(170 - ring * 50)
-                p.setPen(QPen(colour, 2))
-                p.setBrush(Qt.NoBrush)
-                radius = 8 + ring * 12 + rnd.random() * 4
-                p.drawEllipse(QPointF(x, y), radius, radius)
-            arrow = QPainterPath()
-            arrow.moveTo(x + 2, y + 2)
-            for dx, dy in ((2, 26), (9, 19), (15, 31), (20, 29), (14, 17), (24, 17)):
-                arrow.lineTo(x + dx, y + dy)
-            arrow.closeSubpath()
-            p.setPen(QPen(QColor(0, 0, 0, 160), 1.5))
-            p.setBrush(QColor(255, 255, 255, 235))
-            p.drawPath(arrow)
-        p.setPen(QColor(255, 255, 255, 205))
-        p.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
-        p.drawText(QPointF(26, 58), "WHAT’S NEW IN AUTO CLICKER")
-        p.setPen(PALE)
-        p.setFont(QFont("Segoe UI", 28, QFont.Bold))
-        p.drawText(QPointF(23, 104), r["version"])
-        p.setPen(QColor(255, 255, 255, 230))
-        p.setFont(QFont("Segoe UI", 10))
-        p.drawText(QRectF(26, 116, 430, 44), Qt.TextWordWrap, r["title"])
+        p.drawPixmap(self.rect(), self.picture)
 
 
 class WhatsNew(QDialog):
@@ -222,8 +190,7 @@ class WhatsNew(QDialog):
             button.setProperty("current", "true" if j == i else "false")
             button.style().unpolish(button)
             button.style().polish(button)
-        self.banner.release = r
-        self.banner.update()
+        self.banner.show_release(r)
         points = "".join(f"<li style='margin-bottom: 6px'>{_rich(line[2:])}</li>" for line in r["lines"] if line.startswith("- "))
         self.notes.setText(f"<p style='color: rgba(232,234,237,0.55)'>{r['date'].day} {r['date']:%B %Y}</p><ul style='margin-left: -20px; font-size: 13px; line-height: 140%'>{points}</ul>")
         self.notes_scroll.verticalScrollBar().setValue(0)

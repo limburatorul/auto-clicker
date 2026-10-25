@@ -1,6 +1,10 @@
 # What's new, built into the exe (whatsnew.py reads it). Newest first.
 # "## version | yyyy-mm-dd | title", then the notes: "- " a point, "**bold**" inside a line.
 
+## 1.1.1 | 2026-10-25 | A new icon
+- **A new icon**, brighter and easier to spot in the taskbar. It is on the window and the exe.
+- What's new now shows a picture for each release.
+
 ## 1.1.0 | 2026-10-23 | One home for your settings, and this window
 - **What's new lives here now.** Every release, by month, with what changed. It opens once after an update, and any time from **What's new** under the Start button.
 - **Your profiles, sequences and captured images moved** to `%APPDATA%\ProtagonistLabs\Auto Clicker`, beside the other Protagonist Labs apps. It happened by itself the first time 1.1 started; your image steps still find their pictures.
