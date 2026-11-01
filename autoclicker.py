@@ -26,7 +26,7 @@ import theme
 import whatsnew
 import winapi
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
@@ -256,6 +256,11 @@ class AutoClicker(QWidget):
                                     else QDesktopServices.openUrl(QUrl(href)))
         links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
         body.addWidget(links)
+
+        pizza = QPushButton("🍕 Buy me a pizza", objectName="plainBtn")
+        pizza.setToolTip("Optional. It goes toward code signing and a Steam listing.")
+        pizza.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://buymeacoffee.com/protagonistlabs")))
+        body.addWidget(pizza, alignment=Qt.AlignCenter)
 
         # The sister apps, read from their cards off the UI thread.
         self.works = QLabel("", objectName="hint")
