@@ -26,7 +26,7 @@ import theme
 import whatsnew
 import winapi
 
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 RELEASES = "https://api.github.com/repos/limburatorul/auto-clicker/releases/latest"
 
 HOTKEY_ID = 1
