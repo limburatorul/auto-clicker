@@ -123,6 +123,13 @@ def apply_acrylic(hwnd, gradient=0x3826221C):
         wintypes.HWND(hwnd), 33, ctypes.byref(ctypes.c_int(2)), 4)
 
 
+def animations_on():
+    """Windows' "Animation effects" switch (SPI_GETCLIENTAREAANIMATION)."""
+    on = wintypes.BOOL(True)
+    user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(on), 0)
+    return bool(on.value)
+
+
 # --- screen capture -------------------------------------------------------
 
 class BITMAPINFOHEADER(ctypes.Structure):

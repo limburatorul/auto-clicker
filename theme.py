@@ -89,6 +89,14 @@ QPushButton#hotkeyBtn:checked {
     background: rgba(91,157,255,0.18); color: #9CC4FF;
 }
 
+/* The one loud button besides Start, the same red in every Protagonist Labs app. */
+QPushButton#pizzaBtn {
+    background: #D63A3A; border: none; border-radius: 8px; padding: 7px 14px;
+    color: #FFFFFF; font-size: 12px; font-weight: 600;
+}
+QPushButton#pizzaBtn:hover { background: #E54848; }
+QPushButton#pizzaBtn:pressed { background: #BF3030; }
+
 QPushButton#toggleBtn {
     background: rgba(91,157,255,0.90); border: none; border-radius: 12px;
     color: #0C1524; font-size: 14px; font-weight: 700; padding: 13px;

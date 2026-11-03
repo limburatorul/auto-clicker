@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import urllib.request
 from ctypes import wintypes
 
-from PySide6.QtCore import QObject, QRectF, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, QUrl, QVariantAnimation, Signal
 from PySide6.QtGui import (QColor, QDesktopServices, QIcon, QKeySequence,
                            QPainter, QPalette, QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
@@ -257,10 +257,21 @@ class AutoClicker(QWidget):
         links.setTextInteractionFlags(Qt.TextBrowserInteraction)  # the address can be selected and copied
         body.addWidget(links)
 
-        pizza = QPushButton("🍕 Buy me a pizza", objectName="plainBtn")
+        pizza = QPushButton("🍕 Buy me a pizza", objectName="pizzaBtn")
         pizza.setToolTip("Optional. It goes toward code signing and a Steam listing.")
+        pizza.setAccessibleName("Buy me a pizza")
         pizza.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://buymeacoffee.com/protagonistlabs")))
         body.addWidget(pizza, alignment=Qt.AlignCenter)
+        self.pizza = pizza
+        # The nudge: 3 s after the window shows, then every 10 s while it is on screen, the red
+        # brightens twice in 700 ms. A widget cannot be scaled, so only the colour pulses.
+        self._nudge = QVariantAnimation(self, duration=700)
+        for at, color in ((0, "#D63A3A"), (0.14, "#F25555"), (0.42, "#D63A3A"),
+                          (0.56, "#F25555"), (1, "#D63A3A")):
+            self._nudge.setKeyValueAt(at, QColor(color))
+        self._nudge.valueChanged.connect(lambda c: pizza.setStyleSheet(f"background: {c.name()};"))
+        self._nudge.finished.connect(lambda: pizza.setStyleSheet(""))  # back to the hover/pressed rules
+        self._nudge_timer = QTimer(self, interval=3000, timeout=self._pulse_pizza)
 
         # The sister apps, read from their cards off the UI thread.
         self.works = QLabel("", objectName="hint")
@@ -627,6 +638,11 @@ class AutoClicker(QWidget):
         self._set_running(False)
         self.offer.show()
 
+    def _pulse_pizza(self):
+        self._nudge_timer.setInterval(10000)
+        if not self.pizza.underMouse():
+            self._nudge.start()
+
     def _check_update(self):
         threading.Thread(target=lambda: self._update_done.done.emit(update_in_place() or ""), daemon=True).start()
 
@@ -651,6 +667,13 @@ class AutoClicker(QWidget):
         super().showEvent(event)
         winapi.apply_acrylic(int(self.winId()))
         self._register()
+        if winapi.animations_on() and not self._nudge_timer.isActive():
+            self._nudge_timer.start()
+
+    def hideEvent(self, event):
+        # Qt sends this on minimize too, so a minimized window spends nothing on the nudge.
+        super().hideEvent(event)
+        self._nudge_timer.stop()
 
     def closeEvent(self, event):
         if self.runner and self.runner.isRunning():
